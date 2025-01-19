@@ -1,0 +1,136 @@
+سلام الله عليكم ايا معشر المشبكين ...
+طبعا جينا لكم باسكربت يقوم بحساب الرصيد المتبقي وعرضه في تعليق على الانترفيس نفسها 
+وعند الوصول الى اقل من ٥ جيجا يقوم بايقاف الخط وارسال رساله تلقرام تنبيه
+وبنفس الوقت يقوم بتصفير العداد ويضهر لك في التعليق الكميه الكامله للخط...
+طبعا الاسكربت شغال معي منذ شهر وبيؤدي عمله على اكمل وجه وبفوارق شبه معدومه  ولم يؤثر على المعالج حتا بنسبة ١ بالميه والتجربه خير دليل 
+الذي يشتي يجربه يتبع الخطوات الي في الفيديو وبعدها لو ماعجبه يمسحه لان كل شي ضفناه يدوي ويقدر الغبي يضيفه وايظا يحذفه ....
+
+طبعا تم عمل الاسكربت لمراقبة خطين فقط كبدايه
+ من اجل التجربة والاطمئنان بعدم التاثير على المعالج 
+وفي حال نال رضاءكم سيتم تحديثه
+ باسكربت ذكي وبخطوه واحده فقط حيث تحدد له عدد الخطوط ونسخ لصق للترمنال وهو بيضيف كل الخطوات هذه ويراقب جميع الخطوط الشغاله معك
+
+....
+طبعا العمليه بتاخذ ٦ خطوات  وبحسب الرقم تنفذ من ١ الى ٦
+ولما اقول ٦ خطوات مش معناها ٦ سكربت .... الاسكربت هو واحد فقط وباقي الخطوات كلها ضبط للرصيد المتبقي وايظا للباقه الكليه وفيه عدة طرق تقدر تضبط هذه الاشياء من غير الرول الي انا كتبته وانا كتبته رول جاهز مشان الي مش فاهم حاجه 
+
+وهذا كود العمليه للست الخطوات وفي الفيديو مشروحه خطوه خطوه 
+بالتوفيق للجميع
+
+1-
+set comment pppoe-client
+
+2-
+/file print file=Lastusg.txt
+/file print file=Totusg.txt
+#
+
+3-
+{
+:local port1 "IN1";
+:local port2 "IN2";
+:global r "229";
+:global r2 "133";
+:global actusg ([/interface get [find name=$port1] rx-byte]+[/interface get [find name=$port1] tx-byte]);
+:global captot ([/ip addres get [find interface=IN1] comment]);
+:global usg ($captot - $r);
+:global conv (((($usg)*1024)*1024)*1024);
+:global rem ($conv - $actusg);
+
+:global actusg2 ([/interface get [find name=$port2] rx-byte]+[/interface get [find name=$port2] tx-byte]);
+:global captot2 ([/ip addres get [find interface=IN2] comment]);
+:global usg2 ($captot2 - $r2);
+:global conv2 (((($usg2)*1024)*1024)*1024);
+:global rem2 ($conv2 - $actusg2);
+
+/file set Lastusg.txt contents=(":global lusg1 \"0\";\n:global lusg2 \"0\";"); 
+/file set Totusg.txt contents=(":global tusg1 \"$rem\";\n:global tusg2 \"$rem2\";"); 
+
+/interface set [find name=$port1] comment="The remaining balance $usg  GiB"
+/interface set [find name=$port2] comment="The remaining balance $usg2  GiB"
+
+}
+
+
+#
+
+4-
+{
+:global port1 "IN1"
+:global port2 "IN2"
+:global litport " ";
+:global con 0;
+:foreach i in=[/interface ethernet find where name=$port1 or name=$port2] do={
+:global com [/interface ethernet get $i comment];
+:global val [ :pick $com 22 25 ]
+if ($val < 5) do={
+:set $litport [/interface ethernet get $i name];
+:set con 1;
+  }
+}
+/import file-name=Lastusg.txt
+:global lusg1;
+:global lusg2;
+/import file-name=Totusg.txt
+:global tusg1;
+:global tusg2;
+
+if ($con=1) do={
+:global actusg ([/interface get [find name=$litport] rx-byte]+[/interface get [find name=$litport] tx-byte]);
+:global captot [/ip address get [find interface=$litport] comment];
+:global usg ($captot - $captot);
+:global conv (((($usg)*1024)*1024)*1024);
+:global rem ($conv - $actusg);
+if ($litport=$port1) do={ :set lusg1 0; :set tusg1 $rem; }
+if ($litport=$port2) do={ :set lusg2 0; :set tusg2 $rem; }
+/file set Lastusg.txt contents=(":global lusg1 \"$lusg1\";\n:global lusg2 \"$lusg2\";"); 
+/file set Totusg.txt contents=(":global tusg1 \"$tusg1\";\n:global tusg2 \"$tusg2\";"); 
+
+/interface set [find name=$litport] comment="The remaining balance $captot  GiB"
+/interface pppoe-client disable [find interface=$litport]
+/system script run warning
+
+} else={
+:global actusg1 ([/interface get [find name=$port1] rx-byte] + [/interface get [find name=$port1] tx-byte]);
+:global actusg2 ([/interface get [find name=$port2] rx-byte] + [/interface get [find name=$port2] tx-byte]);
+:global sesusg1 ([$actusg1]-[$lusg1]);
+:global added1 ([$sesusg1]+[$tusg1]);
+:global sesusg2 ([$actusg2]-[$lusg2]);
+:global added2 ([$sesusg2]+[$tusg2]);
+
+/file set Lastusg.txt contents=(":global lusg1 \"$actusg1\";\n:global lusg2 \"$actusg2\";"); 
+/file set Totusg.txt contents=(":global tusg1 \"$added1\";\n:global tusg2 \"$added2\";"); 
+
+:global bynas1 ([/interface pppoe-client get [find interface=$port1] comment]-(((([$added1])/1024)/1024)/1024));
+:global bynas2 ([/interface pppoe-client get [find interface=$port2] comment]-(((([$added2])/1024)/1024)/1024));
+/interface set [find name=$port1] comment="The remaining balance $bynas1  GiB"
+/interface set [find name=$port2] comment="The remaining balance $bynas2  GiB"
+
+}
+}
+
+
+5-
+:delay 30s;
+/file set Lastusg.txt contents=(":global lusg1 \"0\";\n:global lusg2 \"0\";"); 
+
+
+6-
+الجزء الخاص بارسال رسائل تنبيه الى تلقرام (اختياري)
+
+بعد انشاء بوت تلقرام قم بلصق token API الخاص بك بدل XXXXXXXXXX
+وايظا ال ID بدل YYYYYYYYYY
+
+{
+:local bot "XXXXXXXXXX"; 
+:local chatID "YYYYYYYYYY"; 
+:local counter 0;
+:while ($counter < 5) do={
+:global litport;
+/tool fetch url="https://api.telegram.org/bot$bot/sendMessage?chat_id=$chatID&text=$litport " keep-result=no
+:delay 2s;
+:set counter ($counter + 1);
+}
+}
+
+
